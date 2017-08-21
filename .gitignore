@@ -9,9 +9,10 @@ pids
 *.DS_Store
 
 .grunt
+data
 
 # Dependency directory
 # https://docs.npmjs.com/misc/faq#should-i-check-my-node-modules-folder-into-git
 node_modules
-
+diff
 coverage

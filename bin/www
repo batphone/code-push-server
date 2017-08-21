@@ -33,6 +33,12 @@ if (process.env.HOST) {
 }
 app.set('port', port);
 
+app.use((req, resp, next) => {
+  log.trace(req)
+  next()
+})
+
+
 /**
  * Create HTTP server.
  */

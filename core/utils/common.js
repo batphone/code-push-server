@@ -5,7 +5,6 @@ var fsextra = require("fs-extra");
 var extract = require('extract-zip')
 var config    = require('../config');
 var _ = require('lodash');
-var qiniu = require("qiniu");
 var common = {};
 var AppError = require('../app-error');
 var log4js = require('log4js');
@@ -125,12 +124,7 @@ common.uptoken = function (bucket, key) {
 common.uploadFileToStorage = function (key, filePath) {
   if (_.get(config, 'common.storageType') === 'local') {
     return common.uploadFileToLocal(key, filePath);
-  } else if (_.get(config, 'common.storageType') === 's3') {
-    return common.uploadFileToS3(key, filePath);
-  } else if (_.get(config, 'common.storageType') === 'oss') {
-    return common.uploadFileToOSS(key, filePath);
   }
-  return common.uploadFileToQiniu(key, filePath);
 };
 
 common.uploadFileToLocal = function (key, filePath) {
@@ -204,93 +198,6 @@ common.getBlobDownloadUrl = function (blobUrl) {
   return `${downloadUrl}/${fileName}`
 };
 
-common.uploadFileToQiniu = function (key, filePath) {
-  return new Promise((resolve, reject) => {
-    qiniu.conf.ACCESS_KEY = _.get(config, "qiniu.accessKey");
-    qiniu.conf.SECRET_KEY = _.get(config, "qiniu.secretKey");
-    var bucket = _.get(config, "qiniu.bucketName", "");
-    var client = new qiniu.rs.Client();
-    client.stat(bucket, key, (err, ret) => {
-      if (!err) {
-        resolve(ret.hash);
-      } else {
-        try {
-          var uptoken = common.uptoken(bucket, key);
-        } catch (e) {
-          return reject(e);
-        }
-        var extra = new qiniu.io.PutExtra();
-        qiniu.io.putFile(uptoken, key, filePath, extra, (err, ret) => {
-          if(!err) {
-            // 上传成功， 处理返回值
-            resolve(ret.hash);
-          } else {
-            // 上传失败， 处理返回代码
-            reject(new AppError.AppError(JSON.stringify(err)));
-          }
-        });
-      }
-    });
-  });
-};
-
-common.uploadFileToS3 = function (key, filePath) {
-  var AWS = require('aws-sdk');
-  return (
-    new Promise((resolve, reject) => {
-      AWS.config.update({
-        accessKeyId: _.get(config, 's3.accessKeyId'),
-        secretAccessKey: _.get(config, 's3.secretAccessKey'),
-        sessionToken: _.get(config, 's3.sessionToken'),
-        region: _.get(config, 's3.region')
-      });
-      var s3 = new AWS.S3({
-        params: {Bucket: _.get(config, 's3.bucketName')}
-      });
-      fs.readFile(filePath, (err, data) => {
-        s3.upload({
-          Key: key,
-          Body: data,
-          ACL:'public-read',
-        }, (err, response) => {
-          if(err) {
-            reject(new AppError.AppError(JSON.stringify(err)));
-          } else {
-            resolve(response.ETag)
-          }
-        })
-      });
-    })
-  );
-};
-
-common.uploadFileToOSS = function (key, filePath) {
-  var ALY = require('aliyun-sdk');
-  var ossStream = require('aliyun-oss-upload-stream')(new ALY.OSS({
-    accessKeyId:  _.get(config, 'oss.accessKeyId'),
-    secretAccessKey: _.get(config, 'oss.secretAccessKey'),
-    endpoint: _.get(config, 'oss.endpoint'),
-    apiVersion: '2013-10-15',
-  }));
-  if (!_.isEmpty(_.get(config, 'oss.prefix', ""))) {
-    key = `${_.get(config, 'oss.prefix')}/${key}`;
-  }
-  var upload = ossStream.upload({
-    Bucket: _.get(config, 'oss.bucketName'),
-    Key: key,
-  });
-
-  return new Promise((resolve, reject) => {
-    upload.on('error', (error) => {
-      reject(error);
-    });
-
-    upload.on('uploaded', (details) => {
-      resolve(details.ETag);
-    });
-    fs.createReadStream(filePath).pipe(upload);
-  });
-};
 
 common.diffCollectionsSync = function (collection1, collection2) {
   var diffFiles = [];

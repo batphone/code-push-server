@@ -86,23 +86,4 @@ router.get('/registerCode/exists', (req, res, next) => {
   });
 });
 
-//修改密码
-router.patch('/password', middleware.checkToken, (req, res, next) => {
-  var oldPassword = _.trim(_.get(req, 'body.oldPassword'));
-  var newPassword = _.trim(_.get(req, 'body.newPassword'));
-  var uid = req.users.id;
-  var accountManager = new AccountManager();
-  return accountManager.changePassword(uid, oldPassword, newPassword)
-  .then(() => {
-    res.send({status: "OK"});
-  })
-  .catch((e) => {
-    if (e instanceof AppError.AppError) {
-      res.send({status: "ERROR", message: e.message});
-    } else {
-      next(e);
-    }
-  });
-});
-
 module.exports = router;
